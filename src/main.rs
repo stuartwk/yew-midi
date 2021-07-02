@@ -83,9 +83,11 @@ impl Component for App {
     type Properties = ();
 
     fn create(_dispatch: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let midi_vec: Vec<u8> = Vec::new();
+
         Self {
             link,
-            last_midi_message: Vec::new(),
+            last_midi_message: midi_vec,
             midi_closure: None,
         }
     }
@@ -113,7 +115,6 @@ impl Component for App {
                     200,
                 )
                 .ok();
-            // closure.forget();
             self.midi_closure = Some(closure);
         }
     }
