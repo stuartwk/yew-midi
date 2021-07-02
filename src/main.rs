@@ -22,7 +22,7 @@ struct App {
 
 impl App {
     // pulled directly from the mimir example https://github.com/Boddlnagg/midir/blob/master/examples/browser/src/lib.rs
-    fn run() -> Result<bool, Box<dyn Error>> {
+    fn run_midi() -> Result<bool, Box<dyn Error>> {
         let window = web_sys::window().expect("no global `window` exists");
 
         let mut midi_in = MidiInput::new("midir reading input")?;
@@ -102,7 +102,7 @@ impl Component for App {
                 .callback(|response: Vec<u8>| Msg::MidiReceived(response));
 
             let closure: Closure<dyn FnMut()> = Closure::wrap(Box::new(move || {
-                if Self::run().unwrap() == true {
+                if Self::run_midi().unwrap() == true {
                     if let Some(token) = *token.lock().unwrap() {
                         web_sys::window().unwrap().clear_interval_with_handle(token);
                     }
