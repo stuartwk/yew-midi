@@ -108,6 +108,22 @@ impl App {
             .ok();
         closure
     }
+
+    fn msg_byte_view(&self, byte: &u8, index: usize, msg_len: usize) -> Html {
+        html! {
+            <span>
+                {byte.to_string()}
+                {
+                    if index < (msg_len - 1) {
+                        html!{", "}
+                    } else {
+                        html!{}
+                    }
+                }
+
+            </span>
+        }
+    }
 }
 
 impl Component for App {
@@ -149,7 +165,16 @@ impl Component for App {
 
         html! {
             <div>
-                <pre>{ msg }</pre>
+                <pre>
+                    {"["}
+                    {
+                        msg
+                            .iter()
+                            .enumerate()
+                            .map(|(i, byte)| self.msg_byte_view(byte, i, msg.len())).collect::<Vec<_>>()
+                    }
+                    {"]"}
+                </pre>
             </div>
         }
     }
