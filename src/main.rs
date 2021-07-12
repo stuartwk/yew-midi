@@ -1,4 +1,5 @@
 use midir::{Ignore, MidiInput};
+use send_wrapper::SendWrapper;
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use yew::prelude::*;
@@ -10,6 +11,7 @@ extern crate web_sys;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
+#[derive(Debug)]
 enum Msg {
     MidiReceived(Vec<u8>),
 }
@@ -21,8 +23,8 @@ struct App {
 }
 
 impl App {
-    // pulled directly from the mimir example https://github.com/Boddlnagg/midir/blob/master/examples/browser/src/lib.rs
-    fn run_midi() -> Result<bool, Box<dyn Error>> {
+    // pulled from the mimir example https://github.com/Boddlnagg/midir/blob/master/examples/browser/src/lib.rs
+    fn run_midi(cb: SendWrapper<Callback<Vec<u8>>>) -> Result<bool, Box<dyn Error>> {
         let window = web_sys::window().expect("no global `window` exists");
 
         let mut midi_in = MidiInput::new("midir reading input")?;
@@ -68,6 +70,7 @@ impl App {
             // cb,
             move |stamp, message, _| {
                 log::info!("{}: {:?} (len = {})", stamp, message, message.len());
+                cb.emit(message.to_vec());
             },
             (),
         )?;
@@ -75,6 +78,35 @@ impl App {
         log::info!("Connection open, reading input from '{}'", in_port_name);
         Box::leak(Box::new(_conn_in));
         Ok(true)
+    }
+
+    fn build_midi_closure(&self) -> Closure<dyn FnMut()> {
+        let token_outer = Arc::new(Mutex::new(None));
+        let token = token_outer.clone();
+
+        let callback = self
+            .link
+            .callback(|response: Vec<u8>| Msg::MidiReceived(response));
+
+        let wrapped_callback = SendWrapper::new(callback);
+
+        let closure: Closure<dyn FnMut()> = Closure::wrap(Box::new(move || {
+            let wrapped_callback = wrapped_callback.clone();
+
+            if Self::run_midi(wrapped_callback).unwrap() == true {
+                if let Some(token) = *token.lock().unwrap() {
+                    web_sys::window().unwrap().clear_interval_with_handle(token);
+                }
+            }
+        }));
+        *token_outer.lock().unwrap() = web_sys::window()
+            .unwrap()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().unchecked_ref(),
+                200,
+            )
+            .ok();
+        closure
     }
 }
 
@@ -94,27 +126,7 @@ impl Component for App {
 
     fn rendered(&mut self, first_render: bool) {
         if first_render {
-            let token_outer = Arc::new(Mutex::new(None));
-            let token = token_outer.clone();
-
-            let callback = self
-                .link
-                .callback(|response: Vec<u8>| Msg::MidiReceived(response));
-
-            let closure: Closure<dyn FnMut()> = Closure::wrap(Box::new(move || {
-                if Self::run_midi().unwrap() == true {
-                    if let Some(token) = *token.lock().unwrap() {
-                        web_sys::window().unwrap().clear_interval_with_handle(token);
-                    }
-                }
-            }));
-            *token_outer.lock().unwrap() = web_sys::window()
-                .unwrap()
-                .set_interval_with_callback_and_timeout_and_arguments_0(
-                    closure.as_ref().unchecked_ref(),
-                    200,
-                )
-                .ok();
+            let closure = self.build_midi_closure();
             self.midi_closure = Some(closure);
         }
     }
@@ -141,6 +153,8 @@ impl Component for App {
             </div>
         }
     }
+
+    fn destroy(&mut self) {}
 }
 
 fn main() {
